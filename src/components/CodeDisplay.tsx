@@ -1,104 +1,91 @@
 import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
-import { pythonCode } from '../data/pythonCode';
-import type { Token } from '../data/pythonCode';
+import gapBufferSource from '@/utils/gapBuffer.ts?raw';
 
-const typeColors: Record<Token['type'], string> = {
-  keyword: 'text-[var(--color-keyword)]',
-  string: 'text-[var(--color-string)]',
-  function: 'text-[var(--color-function)]',
-  comment: 'text-[var(--color-comment)] italic',
-  number: 'text-[var(--color-number)]',
-  class: 'text-[var(--color-class)]',
-  operator: 'text-[var(--color-operator)]',
-  param: 'text-[var(--color-param)]',
-  plain: 'text-[var(--color-text-primary)]',
-  decorator: 'text-[var(--color-keyword)]',
+type TokenType = 'keyword' | 'string' | 'comment' | 'number' | 'type' | 'function' | 'operator' | 'property' | 'plain';
+
+type Token = {
+  text: string;
+  type: TokenType;
 };
 
-// Simple line-by-line tokenizer
+const typeColors: Record<TokenType, string> = {
+  keyword: 'text-[var(--color-keyword)]',
+  string: 'text-[var(--color-string)]',
+  comment: 'text-[var(--color-comment)] italic',
+  number: 'text-[var(--color-number)]',
+  type: 'text-[var(--color-class)]',
+  function: 'text-[var(--color-function)]',
+  operator: 'text-[var(--color-operator)]',
+  property: 'text-[var(--color-param)]',
+  plain: 'text-[var(--color-text-primary)]',
+};
+
+const typeNamePattern = /^[A-Z][A-Za-z0-9_]*/;
+const identifierPattern = /^[A-Za-z_$][A-Za-z0-9_$]*/;
+
 function simpleTokenize(code: string): Token[][] {
-  return code.split('\n').map(line => {
+  return code.split('\n').map((line) => {
     const tokens: Token[] = [];
     let remaining = line;
 
     while (remaining.length > 0) {
-      // Comment
-      const commentMatch = remaining.match(/^(#.*)/);
+      const commentMatch = remaining.match(/^(\/\/.*|\/\*.*\*\/)/);
       if (commentMatch) {
         tokens.push({ text: commentMatch[1], type: 'comment' });
         remaining = remaining.slice(commentMatch[1].length);
         continue;
       }
 
-      // Triple-quoted strings (single line)
-      const tripleMatch = remaining.match(/^(""".*?"""|'''.*?''')/);
-      if (tripleMatch) {
-        tokens.push({ text: tripleMatch[1], type: 'string' });
-        remaining = remaining.slice(tripleMatch[1].length);
+      const stringMatch = remaining.match(/^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`])*`)/);
+      if (stringMatch) {
+        tokens.push({ text: stringMatch[1], type: 'string' });
+        remaining = remaining.slice(stringMatch[1].length);
         continue;
       }
 
-      // Double-quoted strings
-      const dqMatch = remaining.match(/^(f?"[^"]*"|"[^"]*")/);
-      if (dqMatch) {
-        tokens.push({ text: dqMatch[1], type: 'string' });
-        remaining = remaining.slice(dqMatch[1].length);
+      const declarationMatch = remaining.match(/^(class|type|interface|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)/);
+      if (declarationMatch) {
+        const [, keyword, name] = declarationMatch;
+        const whitespace = declarationMatch[0].slice(keyword.length, declarationMatch[0].length - name.length);
+        tokens.push({ text: keyword, type: 'keyword' });
+        tokens.push({ text: whitespace, type: 'plain' });
+        tokens.push({ text: name, type: 'type' });
+        remaining = remaining.slice(declarationMatch[0].length);
         continue;
       }
 
-      // Single-quoted strings
-      const sqMatch = remaining.match(/^(f?'[^']*'|'[^']*')/);
-      if (sqMatch) {
-        tokens.push({ text: sqMatch[1], type: 'string' });
-        remaining = remaining.slice(sqMatch[1].length);
+      const keywordMatch = remaining.match(
+        /^(export|type|class|interface|enum|constructor|static|get|return|if|else|for|while|new|throw|const|let|extends|implements|as|from|import|typeof|instanceof|this|null|true|false|string|number|boolean|void)\b/
+      );
+      if (keywordMatch) {
+        tokens.push({ text: keywordMatch[1], type: 'keyword' });
+        remaining = remaining.slice(keywordMatch[1].length);
         continue;
       }
 
-      // Decorator
-      const decMatch = remaining.match(/^(@\w+)/);
-      if (decMatch) {
-        tokens.push({ text: decMatch[1], type: 'decorator' });
-        remaining = remaining.slice(decMatch[1].length);
+      const functionMatch = remaining.match(/^(assertValid|getText|getCells|getSnapshot|ensureGap|moveGap|moveLeft|moveRight|insert|deleteBack|deleteForward|clone)\b/);
+      if (functionMatch) {
+        tokens.push({ text: functionMatch[1], type: 'function' });
+        remaining = remaining.slice(functionMatch[1].length);
         continue;
       }
 
-      // def/class followed by name
-      const defMatch = remaining.match(/^(def|class)\s+(\w+)/);
-      if (defMatch) {
-        tokens.push({ text: defMatch[1], type: 'keyword' });
-        const wsEnd = defMatch[0].indexOf(defMatch[2]);
-        tokens.push({ text: defMatch[0].slice(defMatch[1].length, wsEnd), type: 'plain' });
-        tokens.push({ text: defMatch[2], type: 'class' });
-        remaining = remaining.slice(defMatch[0].length);
+      const builtinMatch = remaining.match(/^(Math|Number|Error|Array|Pick)\b/);
+      if (builtinMatch) {
+        tokens.push({ text: builtinMatch[1], type: 'function' });
+        remaining = remaining.slice(builtinMatch[1].length);
         continue;
       }
 
-      // Keywords
-      const kwMatch = remaining.match(/^(class|def|if|else|elif|for|while|return|import|from|as|in|not|and|or|is|with|yield|raise|try|except|finally|pass|break|continue|None|True|False)\b/);
-      if (kwMatch) {
-        tokens.push({ text: kwMatch[1], type: 'keyword' });
-        remaining = remaining.slice(kwMatch[1].length);
+      const propertyMatch = remaining.match(/^(\.[A-Za-z_$][A-Za-z0-9_$]*)/);
+      if (propertyMatch) {
+        tokens.push({ text: '.', type: 'plain' });
+        tokens.push({ text: propertyMatch[1].slice(1), type: 'property' });
+        remaining = remaining.slice(propertyMatch[1].length);
         continue;
       }
 
-      // self
-      const selfMatch = remaining.match(/^(self)\b/);
-      if (selfMatch) {
-        tokens.push({ text: 'self', type: 'param' });
-        remaining = remaining.slice(4);
-        continue;
-      }
-
-      // Built-in functions
-      const funcMatch = remaining.match(/^(range|len|print|str|int|float|list|dict|tuple|set|type|min|max|super|isinstance)\b/);
-      if (funcMatch) {
-        tokens.push({ text: funcMatch[1], type: 'function' });
-        remaining = remaining.slice(funcMatch[1].length);
-        continue;
-      }
-
-      // Numbers
       const numMatch = remaining.match(/^(\d+\.?\d*)/);
       if (numMatch) {
         tokens.push({ text: numMatch[1], type: 'number' });
@@ -106,18 +93,27 @@ function simpleTokenize(code: string): Token[][] {
         continue;
       }
 
-      // Operators
-      if ('+-*/=<>!&|^~%'.includes(remaining[0])) {
-        let opEnd = 1;
-        while (opEnd < remaining.length && '+-*/=<>!&|^~%'.includes(remaining[opEnd])) {
-          opEnd++;
-        }
-        tokens.push({ text: remaining.slice(0, opEnd), type: 'operator' });
-        remaining = remaining.slice(opEnd);
+      const typeNameMatch = remaining.match(typeNamePattern);
+      if (typeNameMatch) {
+        tokens.push({ text: typeNameMatch[0], type: 'type' });
+        remaining = remaining.slice(typeNameMatch[0].length);
         continue;
       }
 
-      // Plain character
+      const identifierMatch = remaining.match(identifierPattern);
+      if (identifierMatch) {
+        tokens.push({ text: identifierMatch[0], type: 'plain' });
+        remaining = remaining.slice(identifierMatch[0].length);
+        continue;
+      }
+
+      const operatorMatch = remaining.match(/^(=>|===|!==|==|!=|<=|>=|\+\+|--|\|\||&&|[-+*/=<>!&|^~%?:])/);
+      if (operatorMatch) {
+        tokens.push({ text: operatorMatch[1], type: 'operator' });
+        remaining = remaining.slice(operatorMatch[1].length);
+        continue;
+      }
+
       tokens.push({ text: remaining[0], type: 'plain' });
       remaining = remaining.slice(1);
     }
@@ -130,12 +126,12 @@ export default function CodeDisplay() {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(pythonCode);
+    navigator.clipboard.writeText(gapBufferSource);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, []);
 
-  const tokenizedLines = simpleTokenize(pythonCode);
+  const tokenizedLines = simpleTokenize(gapBufferSource);
 
   return (
     <div className="bg-editor-mid rounded-2xl border border-white/5 overflow-hidden">
@@ -147,7 +143,7 @@ export default function CodeDisplay() {
             <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
             <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
           </div>
-          <span className="text-sm text-text-secondary ml-2 font-mono">gap_buffer.py</span>
+          <span className="text-sm text-text-secondary ml-2 font-mono">gapBuffer.ts</span>
         </div>
         <button
           onClick={handleCopy}

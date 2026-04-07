@@ -12,7 +12,7 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'concepts', label: 'Concepts', icon: <BookOpen size={16} /> },
   { id: 'visualize', label: 'Interactive', icon: <Play size={16} /> },
   { id: 'walkthrough', label: 'Walkthrough', icon: <Terminal size={16} /> },
-  { id: 'code', label: 'Python Code', icon: <Code2 size={16} /> },
+  { id: 'code', label: 'Code', icon: <Code2 size={16} /> },
   { id: 'comparison', label: 'Comparison', icon: <BarChart3 size={16} /> },
 ];
 
@@ -211,8 +211,8 @@ export default function App() {
         {activeTab === 'code' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold mb-1">Python Implementation</h2>
-              <p className="text-text-secondary">A clean, commented Gap Buffer implementation you can study and run</p>
+              <h2 className="text-2xl font-bold mb-1">TypeScript Implementation</h2>
+              <p className="text-text-secondary">The confirmed working Gap Buffer source used by the visualizer and walkthrough</p>
             </div>
             <CodeDisplay />
           </div>

@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-editor-dark: #1e1e2e;
+  --color-editor-mid: #2a2a3c;
+  --color-editor-light: #3a3a50;
+  --color-gap: #ff6b9d;
+  --color-gap-light: #ff6b9d33;
+  --color-cursor: #00d4aa;
+  --color-text-primary: #cdd6f4;
+  --color-text-secondary: #a6adc8;
+  --color-code-bg: #181825;
+  --color-keyword: #c678dd;
+  --color-string: #98c379;
+  --color-function: #61afef;
+  --color-comment: #5c6370;
+  --color-number: #d19a66;
+  --color-class: #e5c07b;
+  --color-operator: #56b6c2;
+  --color-param: #e06c75;
+}
+
+body {
+  background: #13111c;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+@keyframes gapPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.gap-pulse {
+  animation: gapPulse 2s ease-in-out infinite;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: cursorBlink 1s step-end infinite;
+}
+
+.code-block {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.cell {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}

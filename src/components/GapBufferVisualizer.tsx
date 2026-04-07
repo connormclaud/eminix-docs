@@ -1,93 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ChevronLeft, Eraser, Type, ArrowLeft, ArrowRight } from 'lucide-react';
-
-// A visual, interactive Gap Buffer implementation for the browser
-class GapBufferViz {
-  buffer: (string | null)[];
-  gapStart: number;
-  gapEnd: number;
-
-  constructor(capacity: number = 20) {
-    this.buffer = new Array(capacity).fill(null);
-    this.gapStart = 0;
-    this.gapEnd = capacity;
-  }
-
-  get length() {
-    return this.buffer.length - (this.gapEnd - this.gapStart);
-  }
-
-  get gapSize() {
-    return this.gapEnd - this.gapStart;
-  }
-
-  moveGap(newPos: number) {
-    if (newPos === this.gapStart) return;
-    if (newPos > this.gapStart) {
-      const dist = newPos - this.gapStart;
-      for (let i = 0; i < dist; i++) {
-        this.buffer[this.gapEnd] = this.buffer[this.gapStart];
-        this.buffer[this.gapStart] = null;
-        this.gapStart++;
-        this.gapEnd++;
-      }
-    } else {
-      const dist = this.gapStart - newPos;
-      for (let i = 0; i < dist; i++) {
-        this.gapStart--;
-        this.gapEnd--;
-        this.buffer[this.gapStart] = this.buffer[this.gapEnd];
-        this.buffer[this.gapEnd] = null;
-      }
-    }
-  }
-
-  insert(text: string) {
-    for (const char of text) {
-      this.buffer[this.gapStart] = char;
-      this.gapStart++;
-    }
-  }
-
-  deleteBack(count: number) {
-    const toDelete = Math.min(count, this.gapStart);
-    for (let i = 0; i < toDelete; i++) {
-      this.gapStart--;
-      this.buffer[this.gapStart] = null;
-    }
-  }
-
-  deleteForward(count: number) {
-    const textAfter = this.buffer.length - this.gapEnd;
-    const toDelete = Math.min(count, textAfter);
-    for (let i = 0; i < toDelete; i++) {
-      this.buffer[this.gapEnd] = null;
-      this.gapEnd++;
-    }
-  }
-
-  moveLeft() {
-    if (this.gapStart > 0) this.moveGap(this.gapStart - 1);
-  }
-
-  moveRight() {
-    if (this.gapStart < this.length) this.moveGap(this.gapStart + 1);
-  }
-
-  getText() {
-    return this.buffer.filter((_, i) => i < this.gapStart || i >= this.gapEnd).join('');
-  }
-
-  getCells() {
-    return this.buffer.map((val, i) => ({
-      index: i,
-      char: val,
-      isGap: i >= this.gapStart && i < this.gapEnd,
-      isBeforeGap: i === this.gapStart - 1,
-      isAfterGap: i === this.gapEnd,
-    }));
-  }
-}
+import { GapBuffer } from '@/utils/gapBuffer';
 
 export type OperationLog = {
   type: 'insert' | 'delete' | 'move-left' | 'move-right';
@@ -98,7 +11,7 @@ export type OperationLog = {
 const GAP_BUFFER_SIZE = 16;
 
 export default function GapBufferVisualizer() {
-  const [gb, setGb] = useState<GapBufferViz>(() => new GapBufferViz(GAP_BUFFER_SIZE));
+  const [gb, setGb] = useState<GapBuffer>(() => new GapBuffer(GAP_BUFFER_SIZE));
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [inputText, setInputText] = useState('');
   const [deleteCount, setDeleteCount] = useState(1);
@@ -108,83 +21,133 @@ export default function GapBufferVisualizer() {
     setLogs(prev => [...prev.slice(-19), { type, description, complexity }]);
   }, []);
 
+  const flashCells = useCallback((changed: Iterable<number>) => {
+    setHighlightCells(new Set(changed));
+    setTimeout(() => setHighlightCells(new Set()), 1200);
+  }, []);
+
   const handleInsert = useCallback(() => {
     if (!inputText) return;
+
+    let changed = new Set<number>();
+    let description = '';
+
     setGb(prev => {
-      const next = new GapBufferViz(GAP_BUFFER_SIZE);
-      next.buffer = [...prev.buffer];
-      next.gapStart = prev.gapStart;
-      next.gapEnd = prev.gapEnd;
-      next.insert(inputText);
-      // Highlight changed cells
-      const changed = new Set<number>();
-      for (let i = 0; i < inputText.length; i++) {
-        changed.add(prev.gapStart + i);
+      const next = prev.clone();
+      const previousCursor = prev.gapStart;
+      const result = next.insert(inputText);
+      changed = new Set<number>();
+
+      for (let i = 0; i < result.inserted; i++) {
+        changed.add(previousCursor + i);
       }
-      setHighlightCells(changed);
-      setTimeout(() => setHighlightCells(new Set()), 1200);
+
+      description = result.grew
+        ? `Inserted "${inputText}" at cursor after growing from ${result.previousCapacity} to ${result.capacity}`
+        : `Inserted "${inputText}" at cursor`;
+
       return next;
     });
-    addLog('insert', `Inserted "${inputText}" at cursor (gap)`, 'O(n) where n = chars inserted');
+
+    flashCells(changed);
+    addLog('insert', description, 'Amortized O(k) at cursor; O(n) only when the buffer grows');
     setInputText('');
-  }, [inputText, addLog]);
+  }, [inputText, addLog, flashCells]);
 
   const handleDelete = useCallback(() => {
+    let changed = new Set<number>();
+    let deleted = 0;
+
     setGb(prev => {
-      const next = new GapBufferViz(GAP_BUFFER_SIZE);
-      next.buffer = [...prev.buffer];
-      next.gapStart = prev.gapStart;
-      next.gapEnd = prev.gapEnd;
-      next.deleteBack(deleteCount);
-      const changed = new Set<number>();
-      for (let i = 0; i < deleteCount; i++) {
+      const next = prev.clone();
+      const result = next.deleteBack(deleteCount);
+      changed = new Set<number>();
+      deleted = result.deleted;
+
+      for (let i = 0; i < result.deleted; i++) {
         changed.add(prev.gapStart - 1 - i);
       }
-      setHighlightCells(changed);
-      setTimeout(() => setHighlightCells(new Set()), 1200);
+
       return next;
     });
-    addLog('delete', `Deleted ${deleteCount} char(s) before cursor`, 'O(n) where n = chars deleted');
-  }, [deleteCount, addLog]);
+
+    flashCells(changed);
+    addLog('delete', `Deleted ${deleted} char(s) before cursor`, 'O(k) for k deleted characters');
+  }, [deleteCount, addLog, flashCells]);
 
   const handleDeleteForward = useCallback(() => {
+    let changed = new Set<number>();
+    let deleted = 0;
+
     setGb(prev => {
-      const next = new GapBufferViz(GAP_BUFFER_SIZE);
-      next.buffer = [...prev.buffer];
-      next.gapStart = prev.gapStart;
-      next.gapEnd = prev.gapEnd;
-      next.deleteForward(deleteCount);
+      const next = prev.clone();
+      const result = next.deleteForward(deleteCount);
+      changed = new Set<number>();
+      deleted = result.deleted;
+
+      for (let i = 0; i < result.deleted; i++) {
+        changed.add(prev.gapEnd + i);
+      }
+
       return next;
     });
-    addLog('delete', `Forward deleted ${deleteCount} char(s) after cursor`, 'O(n) where n = chars deleted');
-  }, [deleteCount, addLog]);
+
+    flashCells(changed);
+    addLog('delete', `Forward deleted ${deleted} char(s) after cursor`, 'O(k) for k deleted characters');
+  }, [deleteCount, addLog, flashCells]);
 
   const handleMoveLeft = useCallback(() => {
+    let changed = new Set<number>();
+    let moved = 0;
+
     setGb(prev => {
-      const next = new GapBufferViz(GAP_BUFFER_SIZE);
-      next.buffer = [...prev.buffer];
-      next.gapStart = prev.gapStart;
-      next.gapEnd = prev.gapEnd;
-      next.moveLeft();
+      const next = prev.clone();
+      const result = next.moveLeft();
+      changed = new Set<number>();
+      moved = result.moved;
+
+      if (result.moved > 0) {
+        for (let i = next.gapEnd; i < prev.gapEnd; i++) {
+          changed.add(i);
+        }
+      }
+
       return next;
     });
-    addLog('move-left', 'Moved cursor left (gap moved left)', 'O(n) where n = gap distance');
-  }, [addLog]);
+
+    flashCells(changed);
+    if (moved > 0) {
+      addLog('move-left', 'Moved cursor left (gap moved left)', 'O(n) where n is the distance the gap moves');
+    }
+  }, [addLog, flashCells]);
 
   const handleMoveRight = useCallback(() => {
+    let changed = new Set<number>();
+    let moved = 0;
+
     setGb(prev => {
-      const next = new GapBufferViz(GAP_BUFFER_SIZE);
-      next.buffer = [...prev.buffer];
-      next.gapStart = prev.gapStart;
-      next.gapEnd = prev.gapEnd;
-      next.moveRight();
+      const next = prev.clone();
+      const result = next.moveRight();
+      changed = new Set<number>();
+      moved = result.moved;
+
+      if (result.moved > 0) {
+        for (let i = prev.gapStart; i < next.gapStart; i++) {
+          changed.add(i);
+        }
+      }
+
       return next;
     });
-    addLog('move-right', 'Moved cursor right (gap moved right)', 'O(n) where n = gap distance');
-  }, [addLog]);
+
+    flashCells(changed);
+    if (moved > 0) {
+      addLog('move-right', 'Moved cursor right (gap moved right)', 'O(n) where n is the distance the gap moves');
+    }
+  }, [addLog, flashCells]);
 
   const handleReset = useCallback(() => {
-    setGb(new GapBufferViz(GAP_BUFFER_SIZE));
+    setGb(new GapBuffer(GAP_BUFFER_SIZE));
     setLogs([]);
     setHighlightCells(new Set());
   }, []);
@@ -212,12 +175,13 @@ export default function GapBufferVisualizer() {
         </p>
 
         {/* Buffer cells */}
-        <div className="flex flex-wrap gap-1.5 justify-center mb-6">
+        <div className="overflow-x-auto pb-6">
+          <div className="flex w-max gap-1.5 mx-auto px-1">
           {cells.map((cell) => (
             <div
               key={cell.index}
               className={`
-                cell relative w-10 h-10 flex items-center justify-center rounded-lg font-mono text-lg font-bold
+                cell relative w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg font-mono text-lg font-bold
                 ${cell.isGap
                   ? 'bg-gap/20 border-2 border-dashed border-gap gap-pulse'
                   : highlightCells.has(cell.index)
@@ -236,6 +200,7 @@ export default function GapBufferVisualizer() {
               </span>
             </div>
           ))}
+          </div>
         </div>
 
         {/* Gap indicators */}

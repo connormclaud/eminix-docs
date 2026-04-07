@@ -121,7 +121,7 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <div className="flex-shrink-0 text-sm font-bold text-cursor w-16">Before:</div>
                   <div className="flex gap-0.5 flex-1 justify-center">
-                    {['H', 'i', '_'].map((c, i) => (
+                    {['H', 'i', '_', '_'].map((c, i) => (
                       <div key={i} className={`w-8 h-8 flex items-center justify-center rounded font-mono text-sm font-bold ${c === '_' ? 'bg-gap/20 border border-dashed border-gap text-gap' : 'bg-editor-light border border-white/10 text-text-primary'}`}>
                         {c === '_' ? '' : c}
                       </div>

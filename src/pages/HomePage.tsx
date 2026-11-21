@@ -43,9 +43,10 @@ const optimizerGuides: GuideEntry[] = [
     title: 'Hybrid Charm Knapsack Solver',
     description:
       'Combine greedy incumbent seeding, 1D dynamic programming, and density-sorted fractional upper bounds to pack inventory charms.',
-    meta: 'Stage 3 · Planned · DP + Fractional Bounds',
-    icon: <Grid2x2 className="text-text-secondary" size={22} />,
-    ready: false,
+    meta: 'Stage 3 · Ready · Inventory Grid + Live TS',
+    icon: <Grid2x2 className="text-cursor" size={22} />,
+    link: '/charm-knapsack',
+    ready: true,
   },
 ];
 

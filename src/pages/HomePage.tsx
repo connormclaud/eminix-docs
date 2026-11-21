@@ -33,9 +33,10 @@ const optimizerGuides: GuideEntry[] = [
     title: 'Branch-and-Bound Gear Search',
     description:
       'Prune hopeless equipment subtrees early using precomputed suffix upper bounds, bitmask set-bonus tracking, and top-K cutoffs.',
-    meta: 'Stage 2 · Planned · Search Tree + Bounds',
-    icon: <GitBranch className="text-text-secondary" size={22} />,
-    ready: false,
+    meta: 'Stage 2 · Ready · Interactive Tree + Live TS',
+    icon: <GitBranch className="text-cursor" size={22} />,
+    link: '/branch-and-bound',
+    ready: true,
   },
   {
     id: 'charm-knapsack',
